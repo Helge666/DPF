@@ -857,7 +857,10 @@ public:
             }
             info->media_type = V3_EVENT;
             info->direction = busDirection;
-            info->channel_count = 1;
+            // 16, not 1: a host reads this as the number of MIDI channels on the bus, and
+            // Cubase folds every channel onto channel 1 when told there is only one -- so a
+            // multitimbral instrument heard everything on its first part.
+            info->channel_count = 16;
             strncpy_utf16(info->bus_name, busDirection == V3_INPUT ? "Event/MIDI Input"
                                                                    : "Event/MIDI Output", 128);
             info->bus_type = V3_MAIN;
