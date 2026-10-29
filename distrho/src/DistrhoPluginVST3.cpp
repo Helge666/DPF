@@ -3289,10 +3289,14 @@ private:
             if (midiEvent.size == 4)
                 event.midi_cc_out.value2 = data[3];
             break;
-        /* TODO how do we deal with program changes??
         case 0xC0:
+            // Steinberg's controller number for a program change (kCtrlProgramChange,
+            // ivstmidicontrollers.h).
+            event.type = V3_EVENT_LEGACY_MIDI_CC_OUT;
+            event.midi_cc_out.channel = data[0] & 0xf;
+            event.midi_cc_out.cc_number = 130;
+            event.midi_cc_out.value = data[1];
             break;
-        */
         case 0xD0:
             event.type = V3_EVENT_LEGACY_MIDI_CC_OUT;
             event.midi_cc_out.channel = data[0] & 0xf;
@@ -3305,6 +3309,16 @@ private:
             event.midi_cc_out.cc_number = 129;
             event.midi_cc_out.value = data[1];
             event.midi_cc_out.value2 = data[2];
+            break;
+        case 0xF0:
+            // SysEx as a data event, F0 to F7.  The host reads the
+            // bytes later: the plugin keeps them until the end of the block.
+            if (data[0] != 0xF0)
+                return true;
+            event.type = V3_EVENT_DATA;
+            event.data.size = midiEvent.size;
+            event.data.type = 0; // kMidiSysEx
+            event.data.bytes = data;
             break;
         default:
             return true;

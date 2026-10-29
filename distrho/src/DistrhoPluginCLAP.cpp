@@ -2077,7 +2077,17 @@ private:
         DISTRHO_SAFE_ASSERT_RETURN(fOutputEvents != nullptr, false);
 
         if (midiEvent.size > 3)
-            return true;
+        {
+            // SysEx.  The host reads the bytes later: the plugin
+            // keeps them until the end of the block.
+            if (midiEvent.dataExt == nullptr || midiEvent.dataExt[0] != 0xF0)
+                return true;
+            const clap_event_midi_sysex sysexEvent = {
+                { sizeof(clap_event_midi_sysex), midiEvent.frame, 0, CLAP_EVENT_MIDI_SYSEX, CLAP_EVENT_IS_LIVE },
+                0, midiEvent.dataExt, midiEvent.size
+            };
+            return fOutputEvents->try_push(fOutputEvents, &sysexEvent.header);
+        }
 
         const clap_event_midi clapEvent = {
             { sizeof(clap_event_midi), midiEvent.frame, 0, CLAP_EVENT_MIDI, CLAP_EVENT_IS_LIVE },
