@@ -145,6 +145,7 @@ struct Plugin::PrivateData {
     const bool isDummy;
     const bool isSelfTest;
     bool isProcessing;
+    bool parameterNamesChanged;
 
 #if DISTRHO_PLUGIN_NUM_INPUTS+DISTRHO_PLUGIN_NUM_OUTPUTS > 0
     AudioPortWithBusId* audioPorts;
@@ -190,6 +191,7 @@ struct Plugin::PrivateData {
           isDummy(d_nextPluginIsDummy),
           isSelfTest(d_nextPluginIsSelfTest),
           isProcessing(false),
+          parameterNamesChanged(false),
 #if DISTRHO_PLUGIN_NUM_INPUTS+DISTRHO_PLUGIN_NUM_OUTPUTS > 0
           audioPorts(nullptr),
 #endif
@@ -689,6 +691,16 @@ public:
         DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr && index < fData->parameterCount, sFallbackString);
 
         return fData->parameters[index].name;
+    }
+
+    // True once after Plugin::setParameterName() changed a name.
+    bool takeParameterNamesChanged() noexcept
+    {
+        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr, false);
+
+        const bool changed = fData->parameterNamesChanged;
+        fData->parameterNamesChanged = false;
+        return changed;
     }
 
     const String& getParameterShortName(const uint32_t index) const noexcept

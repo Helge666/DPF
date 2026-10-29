@@ -157,6 +157,17 @@ bool Plugin::updateStateValue(const char* const key, const char* const value) no
 }
 #endif
 
+void Plugin::setParameterName(const uint32_t index, const char* const name)
+{
+    DISTRHO_SAFE_ASSERT_RETURN(index < pData->parameterCount,);
+
+    if (pData->parameters[index].name == name)
+        return;
+
+    pData->parameters[index].name = name;
+    pData->parameterNamesChanged = true;
+}
+
 /* ------------------------------------------------------------------------------------------------------------
  * Init */
 

@@ -1769,7 +1769,15 @@ public:
         }
 
         if (fHostExtensions.params != nullptr)
-            fHostExtensions.params->rescan(fHost, CLAP_PARAM_RESCAN_VALUES|CLAP_PARAM_RESCAN_TEXT);
+        {
+            uint32_t flags = CLAP_PARAM_RESCAN_VALUES|CLAP_PARAM_RESCAN_TEXT;
+
+            // The state may have renamed parameters (Plugin::setParameterName).
+            if (fPlugin.takeParameterNamesChanged())
+                flags |= CLAP_PARAM_RESCAN_INFO;
+
+            fHostExtensions.params->rescan(fHost, flags);
+        }
 
        #if DISTRHO_PLUGIN_WANT_LATENCY
         checkForLatencyChanges(fPlugin.isActive(), true);
@@ -1829,6 +1837,10 @@ public:
     void setStateFromUI(const char* const key, const char* const value) override
     {
         fPlugin.setState(key, value);
+
+        // A state change from the UI may rename parameters (Plugin::setParameterName).
+        if (fHostExtensions.params != nullptr && fPlugin.takeParameterNamesChanged())
+            fHostExtensions.params->rescan(fHost, CLAP_PARAM_RESCAN_INFO);
 
         if (fPlugin.wantStateKey(key))
         {

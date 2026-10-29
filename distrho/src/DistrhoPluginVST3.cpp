@@ -1157,6 +1157,10 @@ public:
         if (fComponentHandler != nullptr && componentValuesChanged)
             v3_cpp_obj(fComponentHandler)->restart_component(fComponentHandler, V3_RESTART_PARAM_VALUES_CHANGED);
 
+        // The state may have renamed parameters (Plugin::setParameterName).
+        if (fComponentHandler != nullptr && fPlugin.takeParameterNamesChanged())
+            v3_cpp_obj(fComponentHandler)->restart_component(fComponentHandler, V3_RESTART_PARAM_TITLES_CHANGED);
+
        #if DISTRHO_PLUGIN_HAS_UI
         if (connectedToUI)
         {
@@ -2130,6 +2134,11 @@ public:
     v3_result setComponentHandler(v3_component_handler** const handler) noexcept
     {
         fComponentHandler = handler;
+
+        // Names changed before the host gave us a handler.
+        if (fComponentHandler != nullptr && fPlugin.takeParameterNamesChanged())
+            v3_cpp_obj(fComponentHandler)->restart_component(fComponentHandler, V3_RESTART_PARAM_TITLES_CHANGED);
+
         return V3_OK;
     }
 
@@ -2462,6 +2471,10 @@ public:
         strncpy_utf8(value, value16, static_cast<size_t>(valueLength) * 3 + 1);
 
         fPlugin.setState(key, value);
+
+        // A state change from the UI may rename parameters (Plugin::setParameterName).
+        if (fComponentHandler != nullptr && fPlugin.takeParameterNamesChanged())
+            v3_cpp_obj(fComponentHandler)->restart_component(fComponentHandler, V3_RESTART_PARAM_TITLES_CHANGED);
 
         // save this key as needed
         if (fPlugin.wantStateKey(key))

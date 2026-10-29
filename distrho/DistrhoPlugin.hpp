@@ -175,6 +175,15 @@ public:
     bool updateStateValue(const char* key, const char* value) noexcept;
 #endif
 
+   /**
+      Change the name of a parameter after initParameter().@n
+      The host is asked to read the parameter names again; ID, symbol and value stay the same.@n
+      VST3 and CLAP pass the new name on; LV2 and the others keep the name from initParameter().@n
+      Must not be called during run().
+      @note Not in upstream DPF; added in the logan fork.
+    */
+    void setParameterName(uint32_t index, const char* name);
+
 protected:
    /* --------------------------------------------------------------------------------------------------------
     * Information */
