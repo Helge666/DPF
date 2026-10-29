@@ -326,6 +326,21 @@ protected:
     */
     void onResize(const ResizeEvent& ev) override;
 
+   /**
+      Ask the host to give this UI a new size.
+
+      Call this after resizing the window when the UI itself decided to change size --
+      a drawer that opens, a page that needs more room.  Do NOT call it from onResize:
+      that fires for host-driven resizes too, and a host which treats the request as a
+      minimum size (Ardour does) is then pinned to whatever the user last dragged the
+      window to, so it can grow but never shrink.
+
+      Under CLAP and VST3 setSize() already goes through here, so calling it again with
+      the same size is redundant but harmless.  Under LV2 this is the only way the host
+      is told at all.
+    */
+    void requestSizeChange(uint width, uint height) override;
+
     // -------------------------------------------------------------------------------------------------------
 
 private:
@@ -333,8 +348,6 @@ private:
     PrivateData* const uiData;
     friend class PluginWindow;
     friend class UIExporter;
-   /** @internal */
-    void requestSizeChange(uint width, uint height) override;
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UI)
 };

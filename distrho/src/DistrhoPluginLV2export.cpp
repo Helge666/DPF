@@ -164,6 +164,7 @@ static constexpr const char* const lv2ManifestUiOptionalFeatures[] = {
     "ui:noUserResize",
    #endif
     "ui:parent",
+    "ui:resize",
     "ui:touch",
   #endif
     "ui:requestValue",

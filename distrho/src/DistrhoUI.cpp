@@ -579,7 +579,13 @@ void UI::onResize(const ResizeEvent& ev)
 {
     UIWidget::onResize(ev);
 
-   #if ! DISTRHO_UI_USES_SIZE_REQUEST
+   // NOT under LV2.  This fires for host-driven resizes as well as our own, and there is
+   // nothing in a resize event that says which it was.  ui:resize is a size REQUEST in
+   // the toolkit sense -- Ardour turns it straight into set_size_request(), a MINIMUM --
+   // so echoing the user's own drag back at the host pins the window's floor to whatever
+   // it was last dragged to and it can never be made smaller again.  A UI that means to
+   // change its own size calls requestSizeChange() below and says so.
+   #if ! DISTRHO_UI_USES_SIZE_REQUEST && ! defined(DISTRHO_PLUGIN_TARGET_LV2)
     if (uiData->initializing)
         return;
 
@@ -589,13 +595,17 @@ void UI::onResize(const ResizeEvent& ev)
    #endif
 }
 
-// NOTE: only used for CLAP and VST3
+// NOTE: used for CLAP and VST3, where DGL calls it out of Window::setSize, and for LV2,
+// where the UI calls it itself after resizing its own window.
 void UI::requestSizeChange(const uint width, const uint height)
 {
    #if DISTRHO_UI_USES_SIZE_REQUEST
     if (uiData->initializing)
         uiData->window->setSizeFromHost(width, height);
     else
+        uiData->setSizeCallback(width, height);
+   #elif defined(DISTRHO_PLUGIN_TARGET_LV2)
+    if (! uiData->initializing)
         uiData->setSizeCallback(width, height);
    #else
     // unused

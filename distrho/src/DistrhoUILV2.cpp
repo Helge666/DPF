@@ -49,8 +49,16 @@ static constexpr const setStateFunc setStateCallback = nullptr;
 static constexpr const sendNoteFunc sendNoteCallback = nullptr;
 #endif
 
-// unwanted in LV2, resize extension is deprecated and hosts can do it without extensions
-static constexpr const setSizeFunc setSizeCallback = nullptr;
+// The UI asks the host for a new size through ui:resize; setSizeCallback below is the
+// class member that does it, so nothing is defined here.
+//
+// DPF left this as a nullptr on the grounds that the extension is deprecated and "hosts
+// can do it without extensions".  Some do: the child window is resized either way, and a
+// host that watches it follows along.  Ardour does not watch it.  A plugin that grows its
+// own window -- a drawer that slides out, say -- got a taller X window inside a container
+// that stayed the size it was, so everything past the old height was simply clipped away
+// and the user saw nothing happen at all.  Asking is one call and hosts that ignore it
+// are no worse off than they are now.
 
 // --------------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +96,7 @@ public:
           fUridUnmap(getLv2Feature<LV2_URID_Unmap>(features, LV2_URID__unmap)),
           fUiPortMap(getLv2Feature<LV2UI_Port_Map>(features, LV2_UI__portMap)),
           fUiRequestValue(getLv2Feature<LV2UI_Request_Value>(features, LV2_UI__requestValue)),
+          fUiResize(getLv2Feature<LV2UI_Resize>(features, LV2_UI__resize)),
           fUiTouch(getLv2Feature<LV2UI_Touch>(features, LV2_UI__touch)),
           fController(controller),
           fWriteFunction(writeFunc),
@@ -301,6 +310,7 @@ private:
     const LV2_URID_Unmap*      const fUridUnmap;
     const LV2UI_Port_Map*      const fUiPortMap;
     const LV2UI_Request_Value* const fUiRequestValue;
+    const LV2UI_Resize*        const fUiResize;
     const LV2UI_Touch*         const fUiTouch;
 
     // LV2 UI stuff
@@ -481,6 +491,25 @@ private:
     static bool fileRequestCallback(void* ptr, const char* key)
     {
         return static_cast<UiLv2*>(ptr)->fileRequest(key);
+    }
+
+    /// The UI has resized itself; ask the host to give its container the same size.
+    ///
+    /// Called from UI::onResize, which fires for host-driven resizes too, so the host
+    /// gets told a size it already chose.  That is a no-op everywhere it matters and it
+    /// is the only shape that works: there is nothing in a configure event that says who
+    /// asked for it.
+    void setSize(const uint width, const uint height)
+    {
+        if (fUiResize == nullptr)
+            return;
+
+        fUiResize->ui_resize(fUiResize->handle, static_cast<int>(width), static_cast<int>(height));
+    }
+
+    static void setSizeCallback(void* const ptr, const uint width, const uint height)
+    {
+        static_cast<UiLv2*>(ptr)->setSize(width, height);
     }
 };
 
