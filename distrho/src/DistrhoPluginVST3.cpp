@@ -53,6 +53,7 @@
 #include "travesty/edit_controller.h"
 #include "travesty/factory.h"
 #include "travesty/host.h"
+#include "travesty/unit.h"
 
 #include <atomic>
 #include <cstring>
@@ -667,6 +668,21 @@ public:
             fStateMap[dkey] = fPlugin.getStateDefaultValue(i);
         }
        #endif
+
+        // One VST3 unit per port group that holds parameters.
+        for (uint32_t i=0, count=fPlugin.getPortGroupCount(); i<count; ++i)
+        {
+            const uint32_t groupId = fPlugin.getPortGroupByIndex(i).groupId;
+
+            for (uint32_t j=0; j<fParameterCount; ++j)
+            {
+                if (fPlugin.getParameterGroupId(j) == groupId)
+                {
+                    fUnitGroups.push_back(groupId);
+                    break;
+                }
+            }
+        }
 
        #if !DISTRHO_PLUGIN_HAS_UI
         // unused
@@ -1789,11 +1805,52 @@ public:
         info->flags = flags;
         info->step_count = step_count;
         info->default_normalised_value = ranges.getNormalizedValue(ranges.def);
-        // int32_t unit_id;
+        info->unit_id = getUnitIdForParameter(index);
         strncpy_utf16(info->title,       fPlugin.getParameterName(index), 128);
         strncpy_utf16(info->short_title, fPlugin.getParameterShortName(index), 128);
         strncpy_utf16(info->units,       fPlugin.getParameterUnit(index), 128);
         return V3_OK;
+    }
+
+    // ----------------------------------------------------------------------------------------------------------------
+    // v3_unit_information: parameter groups as units; unit 0 is the root
+
+    int32_t getUnitCount() const noexcept
+    {
+        return 1 + static_cast<int32_t>(fUnitGroups.size());
+    }
+
+    v3_result getUnitInfo(const int32_t unitIndex, v3_unit_info* const info) const noexcept
+    {
+        DISTRHO_SAFE_ASSERT_INT_RETURN(unitIndex >= 0 && unitIndex < getUnitCount(), unitIndex, V3_INVALID_ARG);
+
+        std::memset(info, 0, sizeof(v3_unit_info));
+        info->id = unitIndex;
+        info->program_list_id = -1;
+
+        if (unitIndex == 0)
+        {
+            info->parent_unit_id = -1;
+            strncpy_utf16(info->name, "Root", 128);
+        }
+        else
+        {
+            info->parent_unit_id = 0;
+            strncpy_utf16(info->name, fPlugin.getPortGroupById(fUnitGroups[unitIndex - 1]).name, 128);
+        }
+
+        return V3_OK;
+    }
+
+    int32_t getUnitIdForParameter(const uint32_t index) const noexcept
+    {
+        const uint32_t groupId = fPlugin.getParameterGroupId(index);
+
+        for (size_t i=0; i<fUnitGroups.size(); ++i)
+            if (fUnitGroups[i] == groupId)
+                return static_cast<int32_t>(i + 1);
+
+        return 0;
     }
 
     v3_result getParameterStringForValue(const v3_param_id rindex, const double normalized, v3_str_128 output)
@@ -2596,6 +2653,7 @@ private:
 
     // VST3 stuff
     v3_component_handler** fComponentHandler;
+    std::vector<uint32_t> fUnitGroups; // port group of each unit after the root
   #if DISTRHO_PLUGIN_HAS_UI
    #if DPF_VST3_USES_SEPARATE_CONTROLLER
     v3_connection_point** fConnectionFromCompToCtrl;
@@ -3646,10 +3704,89 @@ struct dpf_midi_mapping : v3_midi_mapping_cpp {
 #endif // DISTRHO_PLUGIN_WANT_MIDI_INPUT
 
 // --------------------------------------------------------------------------------------------------------------------
+// dpf_unit_information: parameter groups as VST3 units, shown as folders by hosts
+
+struct dpf_unit_information : v3_unit_information_cpp {
+    std::atomic_int refcounter;
+    ScopedPointer<PluginVst3>& vst3;
+
+    dpf_unit_information(ScopedPointer<PluginVst3>& v)
+        : refcounter(1),
+          vst3(v)
+    {
+        // v3_funknown, single instance
+        query_interface = query_interface_unit_information;
+        ref = dpf_single_instance_ref<dpf_unit_information>;
+        unref = dpf_single_instance_unref<dpf_unit_information>;
+
+        // v3_unit_information
+        unit.get_unit_count = get_unit_count;
+        unit.get_unit_info = get_unit_info;
+        unit.get_program_list_count = get_program_list_count;
+        unit.get_program_list_info = get_program_list_info;
+        unit.get_program_name = get_program_name;
+        unit.get_program_info = get_program_info;
+        unit.has_program_pitch_names = has_program_pitch_names;
+        unit.get_program_pitch_name = get_program_pitch_name;
+        unit.get_selected_unit = get_selected_unit;
+        unit.select_unit = select_unit;
+        unit.get_unit_by_bus = get_unit_by_bus;
+        unit.set_unit_program_data = set_unit_program_data;
+    }
+
+    static v3_result V3_API query_interface_unit_information(void* const self, const v3_tuid iid, void** const iface)
+    {
+        dpf_unit_information* const unit = *static_cast<dpf_unit_information**>(self);
+
+        if (v3_tuid_match(iid, v3_funknown_iid) ||
+            v3_tuid_match(iid, v3_unit_information_iid))
+        {
+            ++unit->refcounter;
+            *iface = self;
+            return V3_OK;
+        }
+
+        *iface = nullptr;
+        return V3_NO_INTERFACE;
+    }
+
+    static int32_t V3_API get_unit_count(void* const self)
+    {
+        dpf_unit_information* const unit = *static_cast<dpf_unit_information**>(self);
+        PluginVst3* const vst3 = unit->vst3;
+        return vst3 != nullptr ? vst3->getUnitCount() : 1;
+    }
+
+    static v3_result V3_API get_unit_info(void* const self, const int32_t unitIndex, v3_unit_info* const info)
+    {
+        dpf_unit_information* const unit = *static_cast<dpf_unit_information**>(self);
+        PluginVst3* const vst3 = unit->vst3;
+        DISTRHO_SAFE_ASSERT_RETURN(vst3 != nullptr, V3_NOT_INITIALIZED);
+        return vst3->getUnitInfo(unitIndex, info);
+    }
+
+    static int32_t V3_API get_program_list_count(void*) { return 0; }
+    static v3_result V3_API get_program_list_info(void*, int32_t, v3_program_list_info*) { return V3_INVALID_ARG; }
+    static v3_result V3_API get_program_name(void*, int32_t, int32_t, v3_str_128) { return V3_INVALID_ARG; }
+    static v3_result V3_API get_program_info(void*, int32_t, int32_t, const char*, v3_str_128) { return V3_INVALID_ARG; }
+    static v3_result V3_API has_program_pitch_names(void*, int32_t, int32_t) { return V3_FALSE; }
+    static v3_result V3_API get_program_pitch_name(void*, int32_t, int32_t, int16_t, v3_str_128) { return V3_FALSE; }
+    static int32_t V3_API get_selected_unit(void*) { return 0; }
+    static v3_result V3_API select_unit(void*, int32_t) { return V3_OK; }
+    static v3_result V3_API get_unit_by_bus(void*, int32_t, int32_t, int32_t, int32_t, int32_t* const unitId)
+    {
+        *unitId = 0;
+        return V3_OK;
+    }
+    static v3_result V3_API set_unit_program_data(void*, int32_t, int32_t, v3_bstream**) { return V3_NOT_IMPLEMENTED; }
+};
+
+// --------------------------------------------------------------------------------------------------------------------
 // dpf_edit_controller
 
 struct dpf_edit_controller : v3_edit_controller_cpp {
     std::atomic_int refcounter;
+    ScopedPointer<dpf_unit_information> unitInformation;
    #if DISTRHO_PLUGIN_HAS_UI
     ScopedPointer<dpf_ctrl2view_connection_point> connectionCtrl2View;
    #endif
@@ -3771,6 +3908,17 @@ struct dpf_edit_controller : v3_edit_controller_cpp {
             *iface = nullptr;
             return V3_NO_INTERFACE;
            #endif
+        }
+
+        // Parameter groups as units.
+        if (v3_tuid_match(iid, v3_unit_information_iid))
+        {
+            if (controller->unitInformation == nullptr)
+                controller->unitInformation = new dpf_unit_information(controller->vst3);
+            else
+                ++controller->unitInformation->refcounter;
+            *iface = &controller->unitInformation;
+            return V3_OK;
         }
 
         if (v3_tuid_match(iid, v3_connection_point_iid))

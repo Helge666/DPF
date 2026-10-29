@@ -1200,21 +1200,12 @@ public:
 
             d_strncpy(info->name, fPlugin.getParameterName(index), CLAP_NAME_SIZE);
 
-            uint wrtn;
+            // The module is a display path ("Oscillators/Wavetable 1"), so use the group's
+            // name, which may change at runtime.
             if (groupId != kPortGroupNone)
-            {
-                const PortGroupWithId& portGroup(fPlugin.getPortGroupById(groupId));
-                strncpy(info->module, portGroup.symbol, CLAP_PATH_SIZE / 2);
-                info->module[CLAP_PATH_SIZE / 2] = '\0';
-                wrtn = std::strlen(info->module);
-                info->module[wrtn++] = '/';
-            }
+                d_strncpy(info->module, fPlugin.getPortGroupById(groupId).name, CLAP_PATH_SIZE);
             else
-            {
-                wrtn = 0;
-            }
-
-            d_strncpy(info->module + wrtn, fPlugin.getParameterSymbol(index), CLAP_PATH_SIZE - wrtn);
+                info->module[0] = '\0';
             break;
         }
 

@@ -184,6 +184,15 @@ public:
     */
     void setParameterName(uint32_t index, const char* name);
 
+   /**
+      Change the name of a parameter group (a port group used by parameters) after initPortGroup().@n
+      Hosts show parameter groups as folders: VST3 units, CLAP modules.
+      Like setParameterName(), the host is asked to read the names again.@n
+      Must not be called during run().
+      @note Not in upstream DPF; added in the logan fork.
+    */
+    void setPortGroupName(uint32_t groupId, const char* name);
+
 protected:
    /* --------------------------------------------------------------------------------------------------------
     * Information */

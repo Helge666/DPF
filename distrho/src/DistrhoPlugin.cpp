@@ -168,6 +168,24 @@ void Plugin::setParameterName(const uint32_t index, const char* const name)
     pData->parameterNamesChanged = true;
 }
 
+void Plugin::setPortGroupName(const uint32_t groupId, const char* const name)
+{
+    for (uint32_t i = 0; i < pData->portGroupCount; ++i)
+    {
+        PortGroupWithId& group(pData->portGroups[i]);
+
+        if (group.groupId != groupId)
+            continue;
+
+        if (group.name == name)
+            return;
+
+        group.name = name;
+        pData->parameterNamesChanged = true;
+        return;
+    }
+}
+
 /* ------------------------------------------------------------------------------------------------------------
  * Init */
 
