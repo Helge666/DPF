@@ -2397,17 +2397,19 @@ public:
             DISTRHO_SAFE_ASSERT_INT2_RETURN(res == V3_OK, res, valueLength, res);
         }
 
-        // do cheap inline conversion
-        char* const key = (char*)key16;
-        char* const value = (char*)value16;
+        // back to UTF-8, into buffers of their own: the lengths are the
+        // sender's UTF-8 byte counts, and UTF-8 may be longer than the UTF-16 it came from
+        key16[keyLength] = 0;
+        value16[valueLength] = 0;
 
-        for (int64_t i=0; i<keyLength; ++i)
-            key[i] = key16[i];
-        for (int64_t i=0; i<valueLength; ++i)
-            value[i] = value16[i];
+        char* const key = (char*)std::malloc(static_cast<size_t>(keyLength) * 3 + 1);
+        DISTRHO_SAFE_ASSERT_RETURN(key != nullptr, V3_NOMEM);
 
-        key[keyLength] = '\0';
-        value[valueLength] = '\0';
+        char* const value = (char*)std::malloc(static_cast<size_t>(valueLength) * 3 + 1);
+        DISTRHO_SAFE_ASSERT_RETURN(value != nullptr, V3_NOMEM);
+
+        strncpy_utf8(key, key16, static_cast<size_t>(keyLength) * 3 + 1);
+        strncpy_utf8(value, value16, static_cast<size_t>(valueLength) * 3 + 1);
 
         fPlugin.setState(key, value);
 
@@ -2418,6 +2420,8 @@ public:
             fStateMap[dkey] = value;
         }
 
+        std::free(key);
+        std::free(value);
         std::free(key16);
         std::free(value16);
         return V3_OK;
