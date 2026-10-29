@@ -2706,7 +2706,9 @@ private:
             {
                 port.busId = std::find(vpgStart, vpgEnd, port.groupId) - vpgStart;
 
-                if (busInfo.audio == 0 && (port.hints & kAudioPortIsSidechain) == 0x0)
+                // Only the first group starts on: the others are extra outputs the user
+                // switches on in the host.
+                if (busInfo.audio == 0 && (port.hints & kAudioPortIsSidechain) == 0x0 && port.busId == 0)
                     enabledPorts[i] = true;
             }
             else
@@ -2785,8 +2787,12 @@ private:
                     }
                     else
                     {
+                        // A second or third group is an extra output: a main bus too (as
+                        // Steinberg's own multi-output instruments have it; Cubase will not
+                        // switch an aux bus on), but off until the user switches it on --
+                        // much like a hardware DIRECT OUT that only sounds with a plug in it.
                         busType = V3_MAIN;
-                        flags = busInfo.audio == 0 ? V3_DEFAULT_ACTIVE : 0;
+                        flags = busInfo.audio == 0 && busId == 0 ? V3_DEFAULT_ACTIVE : 0;
                     }
                     break;
                 }
@@ -2996,7 +3002,11 @@ private:
                     continue;
                 }
 
-                enabledPorts[i] = arr != 0;
+                // An arrangement does not switch a bus on -- activateBus() does; Cubase
+                // arranges every bus, also the extra outputs it leaves off, and the sound
+                // meant for the main output went to an output nobody hears.
+                if (arr == 0)
+                    enabledPorts[i] = false;
             }
         }
 
