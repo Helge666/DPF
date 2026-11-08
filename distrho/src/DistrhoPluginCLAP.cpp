@@ -1405,7 +1405,9 @@ public:
             info->port_type = CLAP_PORT_STEREO;
             break;
         default:
-            info->port_type = nullptr;
+            // a group of the plugin's own: its width says what it is
+            info->port_type = busInfo.numChannels == 1 ? CLAP_PORT_MONO
+                            : busInfo.numChannels == 2 ? CLAP_PORT_STEREO : nullptr;
             break;
         }
 
@@ -2615,6 +2617,13 @@ static const clap_plugin_descriptor_t* CLAP_ABI clap_get_plugin_descriptor(const
         nullptr
     };
 
+    static char version[32] = {};
+    if (version[0] == '\0')
+    {
+        const uint32_t v = sPlugin->getVersion();
+        std::snprintf(version, sizeof(version), "%u.%u.%u", (v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff);
+    }
+
     static const clap_plugin_descriptor_t descriptor = {
         CLAP_VERSION,
         DISTRHO_PLUGIN_CLAP_ID,
@@ -2626,8 +2635,7 @@ static const clap_plugin_descriptor_t* CLAP_ABI clap_get_plugin_descriptor(const
         "",
         // TODO support url
         "",
-        // TODO version string
-        "",
+        version,
         sPlugin->getDescription(),
         features
     };
